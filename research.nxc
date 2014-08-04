@@ -1,0 +1,697 @@
+#define ULTRA SENSOR_1
+#define SIDE_LIGHT SENSOR_2
+#define LIGHT SENSOR_3
+#define IR SENSOR_4
+
+int blue, white, silver;
+
+#define SPEED 40
+
+int osctime = 250;
+int maze[11][11];
+int row = 5;
+int column = 5;
+int dir, score;
+
+char left, right, straight;
+
+int tile(int dir) {
+    switch(dir) {
+        case 0:
+            return maze[row + 1][column];
+            break;
+        case 1:
+            return maze[row][column + 1];
+            break;
+        case 2:
+            return maze[row - 1][column];
+            break;
+        case 3:
+            return maze[row][column - 1];
+            break;
+        default:
+            return maze[row][column];
+    }
+}
+
+sub SuccessBeep() {
+    PlayTone(1174, 100);
+}
+
+sub FailBeep() {
+    PlayTone(988, 100);
+}
+
+sub calibrate() {
+    TextOut(0,LCD_LINE1,"Calibrating BLU",true);
+    until(ButtonPressed(BTNCENTER, false));
+    FailBeep();
+    blue = LIGHT;
+    string blueMessage = NumToStr(blue);
+    SendMessage(1,blueMessage);
+    SendMessage(0,"Calibrated Blue");
+    NumOut(0,LCD_LINE2,blue);
+    Wait(500);
+    
+    TextOut(0,LCD_LINE3,"Calibrating WHT");
+    until(ButtonPressed(BTNCENTER, false));
+    FailBeep();
+    white = LIGHT;
+    string whiteMessage = NumToStr(white);
+    SendMessage(1,whiteMessage);
+    SendMessage(0,"Calibrated White");
+    NumOut(0,LCD_LINE4,white);
+    Wait(500);
+    
+    TextOut(0,LCD_LINE5,"Calibrating SLV");
+    until(ButtonPressed(BTNCENTER, false));
+    FailBeep();
+    silver = LIGHT;
+    string silverMessage = NumToStr(silver);
+    SendMessage(1,silverMessage);
+    SendMessage(0,"Calibrated Silver");
+    NumOut(0,LCD_LINE6,silver);
+    Wait(500);
+    
+    TextOut(0,LCD_LINE7,"Calibration OK!");
+    SuccessBeep();
+    Wait(200);
+    SuccessBeep();
+}
+
+task drive() {
+    int correction = 0;
+    int border = 0;
+    
+    while(true) {
+        osctime = 0;
+        while(abs(LIGHT - white) < 5) {
+            // You drove off the blue tape.
+            // Bad robot.
+            correction++;
+            if(border >= 10) {
+                Off(OUT_AC);
+                osctime += 250;
+                if(correction % 2 == 0) {
+                    // Turn right to try to correct
+                    OnFwd(OUT_A, SPEED);
+                    OnRev(OUT_C, SPEED);
+                } else {
+                    // Turn left to try to correct
+                    OnFwd(OUT_C, SPEED);
+                    OnRev(OUT_A, SPEED);
+                }
+                Wait(osctime);
+            }
+            border++;
+        }
+        border = 0;
+        correction = 0;
+        OnFwd(OUT_AC,SPEED);
+        Wait(100);
+    }
+}
+
+sub Turn(int turndir) {
+    int rotationCount = MotorRotationCount(OUT_A);
+    OnFwd(OUT_A,turndir * SPEED);
+    OnRev(OUT_C,turndir * SPEED);
+    
+    until(abs(LIGHT - blue) <= 10);
+    Wait(50);
+    Off(OUT_AC);
+    int turnCount = MotorRotationCount(OUT_A) - rotationCount;
+    if(turnCount <= 300) {
+        if(turndir == 1) right = 'Y';
+    }
+    
+    switch(dir) {
+        case 0:
+            score = 4;
+            if(left == 'Y') score += 8;
+            if(straight == 'Y') score += 1;
+            if(right == 'Y') score += 2;
+            break;
+        case 1:
+            score = 8;
+            if(left == 'Y') score += 1;
+            if(straight == 'Y') score += 2;
+            if(right == 'Y') score += 4;
+            break;
+        case 2:
+            score = 1;
+            if(left == 'Y') score += 2;
+            if(straight == 'Y') score += 4;
+            if(right == 'Y') score += 8;
+            break;
+        case 3:
+            score = 2;
+            if(left == 'Y') score += 4;
+            if(straight == 'Y') score += 8;
+            if(right == 'Y') score += 1;
+            break;
+    }
+    if(left == 'N' && right == 'N' && straight == 'N') score *= -1;
+    
+    if(turnCount > 300) turndir *= 2;
+    dir += turndir;
+    
+    if(dir > 3) dir -= 4;
+    if(dir < 0) dir += 4;
+}
+
+sub ExamineTile() {
+    if(LIGHT >= (white - 5)) {
+        FailBeep();
+        straight = 'N';
+        TextOut(0,LCD_LINE1,"FAIL    ^^^^^^");
+        // Straight is NOT valid
+    } else {
+        SuccessBeep();
+        straight = 'Y';
+        TextOut(0,LCD_LINE1,"PASS    ^^^^^^");
+        // Straight is valid
+    }
+    NumOut(0,LCD_LINE2,LIGHT);
+    Wait(200);
+    if(SIDE_LIGHT >= (white - 5)) {
+        FailBeep();
+        right = 'N';
+        TextOut(0,LCD_LINE3,"FAIL    >>>>>>");
+        // Right is NOT valid
+    } else {
+        SuccessBeep();
+        right = 'Y';
+        TextOut(0,LCD_LINE3,"PASS    >>>>>>");
+        // Right is valid
+    }
+    NumOut(0,LCD_LINE4,SIDE_LIGHT);
+    OnFwd(OUT_C, SPEED);
+    OnRev(OUT_A, SPEED);
+    Wait(750);
+    if(LIGHT >= (white - 5)) {
+        FailBeep();
+        left = 'N';
+        TextOut(0,LCD_LINE5,"FAIL    <<<<<<");
+        // Left is NOT valid
+    } else {
+        SuccessBeep();
+        left = 'Y';
+        TextOut(0,LCD_LINE5,"PASS    <<<<<<");
+        // Right is valid
+    }
+    NumOut(0,LCD_LINE6,LIGHT);
+    OnRev(OUT_C, SPEED);
+    OnFwd(OUT_A, SPEED);
+    Wait(750);
+    Off(OUT_AC);
+}
+
+sub XCheckAdjacentCells() {
+    switch(dir) {
+        case 0:
+            // Straight, Right, Left, RL, SL, SR, else
+            if(tile(0) == 0 && tile(1) != 0 && tile(3) != 0) {
+                break;
+            } else if (tile(1) == 0 && tile(3) != 0 && tile(0) != 0) {
+                Turn(1);
+            } else if (tile(3) == 0 && tile(1) != 0 && tile(0) != 0) {
+                Turn(-1);
+            } else if (tile(3) == 0 && tile(1) == 0 && tile(0) != 0) {
+                // have not explored left or right, pick one at random
+                if(Random(2) == 1) {
+                    Turn(-1);
+                } else {
+                    Turn(1);
+                }
+            } else if (tile(3) == 0 && tile(1) != 0 && tile(0) == 0) {
+                // have not explored straight or left
+                if(Random(2) == 1) {
+                    Turn(-1);
+                } else {
+                    break;
+                }
+            } else if (tile(1) == 0 && tile(3) != 0 && tile(0) == 0) {
+                // have not explored straight or right
+                if(Random(2) == 1) {
+                    Turn(1);
+                } else {
+                    break;
+                }
+            } else {
+                switch(Random(3)) {
+                    case 0:
+                        Turn(-1);
+                        break;
+                    case 1:
+                        Turn(1);
+                        break;
+                    case 2:
+                        break;
+                }
+            }
+            break;
+        case 1:
+            // Straight, Right, Left, RL, SL, SR, else
+            if(tile(1) == 0 && tile(0) != 0 && tile(2) != 0) {
+                break;
+            } else if (tile(2) == 0 && tile(1) != 0 && tile(0) != 0) {
+                Turn(1);
+            } else if (tile(0) == 0 && tile(1) != 0 && tile(2) != 0) {
+                Turn(-1);
+            } else if (tile(1) != 0 && tile(0) == 0 && tile(2) == 0) {
+                // have not explored left or right, pick one at random
+                if(Random(2) == 1) {
+                    Turn(-1);
+                } else {
+                    Turn(1);
+                }
+            } else if (tile(1) == 0 && tile(2) != 0 && tile(0) == 0) {
+                // have not explored straight or left
+                if(Random(2) == 1) {
+                    Turn(-1);
+                } else {
+                    break;
+                }
+            } else if (tile(1) == 0 && tile(0) != 0 && tile(2) == 0) {
+                // have not explored straight or right
+                if(Random(2) == 1) {
+                    Turn(1);
+                } else {
+                    break;
+                }
+            } else {
+                switch(Random(3)) {
+                    case 0:
+                        Turn(-1);
+                        break;
+                    case 1:
+                        Turn(1);
+                        break;
+                    case 2:
+                        break;
+                }
+            }
+            break;
+        case 2:
+            // Straight, Right, Left, RL, SL, SR, else
+            if(tile(2) == 0 && tile(3) != 0 && tile(1) != 0) {
+                break;
+            } else if (tile(3) == 0 && tile(1) != 0 && tile(2) != 0) {
+                Turn(1);
+            } else if (tile(1) == 0 && tile(3) != 0 && tile(2) != 0) {
+                Turn(-1);
+            } else if (tile(1) == 0 && tile(3) == 0 && tile(2) != 0) {
+                // have not explored left or right, pick one at random
+                if(Random(2) == 1) {
+                    Turn(-1);
+                } else {
+                    Turn(1);
+                }
+            } else if (tile(1) == 0 && tile(3) != 0 && tile(2) == 0) {
+                // have not explored straight or left
+                if(Random(2) == 1) {
+                    Turn(-1);
+                } else {
+                    break;
+                }
+            } else if (tile(3) == 0 && tile(1) != 0 && tile(2) == 0) {
+                // have not explored straight or right
+                if(Random(2) == 1) {
+                    Turn(1);
+                } else {
+                    break;
+                }
+            } else {
+                switch(Random(3)) {
+                    case 0:
+                        Turn(-1);
+                        break;
+                    case 1:
+                        Turn(1);
+                        break;
+                    case 2:
+                        break;
+                }
+            }
+            break;
+        case 3:
+            // Straight, Right, Left, RL, SL, SR, else
+            if(tile(3) == 0 && tile(2) != 0 && tile(0) != 0) {
+                break;
+            } else if (tile(0) == 0 && tile(3) != 0 && tile(2) != 0) {
+                Turn(1);
+            } else if (tile(2) == 0 && tile(3) != 0 && tile(0) != 0) {
+                Turn(2);
+            } else if (tile(3) != 0 && tile(2) == 0 && tile(0) == 0) {
+                // have not explored left or right, pick one at random
+                if(Random(2) == 1) {
+                    Turn(2);
+                } else {
+                    Turn(1);
+                }
+            } else if (tile(3) == 0 && tile(0) != 0 && tile(2) == 0) {
+                // have not explored straight or left
+                if(Random(2) == 1) {
+                    Turn(2);
+                } else {
+                    break;
+                }
+            } else if (tile(3) == 0 && tile(2) != 0 && tile(0) == 0) {
+                // have not explored straight or right
+                if(Random(2) == 1) {
+                    Turn(1);
+                } else {
+                    break;
+                }
+            } else {
+                switch(Random(3)) {
+                    case 0:
+                        Turn(2);
+                        break;
+                    case 1:
+                        Turn(1);
+                        break;
+                    case 2:
+                        break;
+                }
+            }
+            break;
+    }
+}
+
+sub TCheckAdjacentCells(int cellScore) {
+    int TurnDir = Random(2);
+    switch(cellScore) {
+        case 3:
+            // Straight or Left
+            switch(dir) {
+                case 0:
+                    if(tile(3) != 0 && tile(0) == 0) {
+                        break;
+                    } else if(tile(3) == 0 && tile(0) != 0) {
+                        Turn(-1);
+                    } else {
+                        if(TurnDir % 2 == 1) {
+                            break;
+                        } else {
+                            Turn(-1);
+                        }
+                    }
+                    break;
+                case 1:
+                    if(tile(0) != 0 && tile(1) == 0) {
+                        break;
+                    } else if(tile(0) == 0 && tile(1) != 0) {
+                        Turn(-1);
+                    } else {
+                        if(TurnDir % 2 == 1) {
+                            break;
+                        } else {
+                            Turn(-1);
+                        }
+                    }
+                    break;
+                case 2:
+                    if(tile(1) != 0 && tile(2) == 0) {
+                        break;
+                    } else if(tile(1) == 0 && tile(2) != 0) {
+                        Turn(-1);
+                    } else {
+                        if(TurnDir % 2 == 1) {
+                            break;
+                        } else {
+                            Turn(-1);
+                        }
+                    }
+                    break;
+                case 3:
+                    if(tile(2) != 0 && tile(3) == 0) {
+                        break;
+                    } else if(tile(2) == 0 && tile(3) != 0) {
+                        Turn(-1);
+                    } else {
+                        if(TurnDir % 2 == 1) {
+                            break;
+                        } else {
+                            Turn(-1);
+                        }
+                    }
+                    break;
+            }
+            break;
+        case 5:
+            // Left or Right
+            switch(dir) {
+                case 0:
+                    if(tile(1) == 0 && tile(3) != 0) {
+                        Turn(1);
+                    } else if(tile(1) != 0 && tile(3) == 0) {
+                        Turn(-1);
+                    } else {
+                        if(TurnDir % 2 == 1) {
+                            Turn(-1);
+                        } else {
+                            Turn(1);
+                        }
+                    }
+                    break;
+                case 1:
+                    if(tile(2) == 0 && tile(0) != 0) {
+                        Turn(1);
+                    } else if(tile(2) != 0 && tile(0) == 0) {
+                        Turn(-1);
+                    } else {
+                        if(TurnDir % 2 == 1) {
+                            Turn(-1);
+                        } else {
+                            Turn(1);
+                        }
+                    }
+                    break;
+                case 2:
+                    if(tile(3) == 0 && tile(1) != 0) {
+                        Turn(1);
+                    } else if(tile(3) != 0 && tile(1) == 0) {
+                        Turn(-1);
+                    } else {
+                        if(TurnDir % 2 == 1) {
+                            Turn(-1);
+                        } else {
+                            Turn(1);
+                        }
+                    }
+                    break;
+                case 3:
+                    if(tile(0) == 0 && tile(2) != 0) {
+                        Turn(1);
+                    } else if(tile(0) != 0 && tile(2) == 0) {
+                        Turn(-1);
+                    } else {
+                        if(TurnDir % 2 == 1) {
+                            Turn(-1);
+                        } else {
+                            Turn(1);
+                        }
+                    }
+                    break;
+            }
+            break;
+        case 6:
+            // Straight or Right 
+            switch(dir) {
+            case 0:
+                if(tile(0) == 0 && tile(1) != 0) {
+                    break;
+                } else if(tile(0) != 0 && tile(1) == 0) {
+                    Turn(1);
+                } else {
+                    if(TurnDir % 2 == 1) {
+                        break;
+                    } else {
+                        Turn(1);
+                    }
+                }
+                break;
+            case 1:
+                if(tile(1) == 0 && tile(2) != 0) {
+                    break;
+                } else if(tile(1) != 0 && tile(2) == 0) {
+                    Turn(1);
+                } else {
+                    if(TurnDir % 2 == 1) {
+                        break;
+                    } else {
+                        Turn(1);
+                    }
+                }
+                break;
+            case 2:
+                if(tile(2) == 0 && tile(3) != 0) {
+                    break;
+                } else if(tile(2) != 0 && tile(3) == 0) {
+                    Turn(1);
+                } else {
+                    if(TurnDir % 2 == 1) {
+                        break;
+                    } else {
+                        Turn(1);
+                    }
+                }
+                break;
+            case 3:
+                if(tile(3) == 0 && tile(0) != 0) {
+                    break;
+                } else if(tile(3) != 0 && tile(0) == 0) {
+                    Turn(1);
+                } else {
+                    if(TurnDir % 2 == 1) {
+                        break;
+                    } else {
+                        Turn(1);
+                    }
+                }
+                break;
+            }
+            break;
+    }
+}
+
+sub DecideDirection() {
+    int CS = abs(maze[row][column]);
+    int cellScore = 0;
+    if(left == 'Y') cellScore += 1;
+    if(straight == 'Y') cellScore += 2;
+    if(right == 'Y') cellScore += 4;
+    switch(cellScore) {
+        case 0:
+            // you hit a dead end. turn around.
+            Turn(1);
+            break;
+        case 1:
+            // Left is the only option
+            Turn(-1);
+            break;
+        case 2:
+            //straight is the only option
+            break;
+        case 3:
+            // This is going to get complicated.
+            // Left or straight
+            TCheckAdjacentCells(cellScore);
+            break;
+        case 4:
+            // Right is the only option
+            Turn(1);
+            break;
+        case 5:
+            // T-junction, robot must turn
+            TCheckAdjacentCells(cellScore);
+            break;
+        case 6:
+            // Straight or right
+            TCheckAdjacentCells(cellScore);
+            break;
+        case 7:
+            // THE MOST COMPLICATED THING. Pick any direction.
+            XCheckAdjacentCells();
+            break;
+    }
+    if(CS == 0) {
+        maze[row][column] = score;
+    } else if (CS != score) {
+        switch(dir) {
+            case 0:
+                if(right == 'Y' && CS % 4 < 2) CS += 2;
+                if(straight == 'Y' && CS % 2 < 1) CS += 1;
+                if(left == 'Y' && CS % 16 < 8) CS += 8;
+                break;
+            case 1:
+                if(right == 'Y' && CS % 8 < 4) CS += 4;
+                if(straight == 'Y' && CS % 4 < 2) CS += 2;
+                if(left == 'Y' && CS % 2 < 1) CS += 1;
+                break;
+            case 2:
+                if(right == 'Y' && CS % 16 < 8) CS += 8;
+                if(straight == 'Y' && CS % 8 < 4) CS += 4;
+                if(left == 'Y' && CS % 4 < 2) CS += 2;
+                break;
+            case 3:
+                if(right == 'Y' && CS % 2 < 1) CS += 1;
+                if(straight == 'Y' && CS % 16 < 8) CS += 8;
+                if(left == 'Y' && CS % 8 < 4) CS += 4;
+                break;
+        }
+        if(score < 0) {
+            maze[row][column] = CS * -1;
+        } else {
+            maze[row][column] = CS;
+        }
+    }
+    switch(dir) {
+        case 0:
+            row++;
+            break;
+        case 1:
+            column++;
+            break;
+        case 2:
+            row--;
+            break;
+        case 3:
+            column--;
+            break;
+    }
+}
+
+task ExploreMode() {
+    while(true) {
+        until(abs(LIGHT - silver) < 5);
+        stop drive;
+        OnFwd(OUT_AC,SPEED);
+        Wait(200);
+        until(LIGHT < (silver - 7));
+        Wait(150);
+        Off(OUT_AC);
+        ExamineTile();
+        DecideDirection();
+        start drive;
+        Wait(1000);
+    }
+}
+
+task BluetoothSlave() {
+    string message;
+    while(true) {
+        ReceiveMessage(5,1,message);
+        TextOut(0,LCD_LINE8,message);
+        if(message == "ChangeMode") {
+            stop drive;
+            stop ExploreMode;
+            Off(OUT_AC);
+            ReceiveMessage(6,1,message);
+            if(message == "Calibrate") {
+                SuccessBeep();
+                calibrate();
+                SendMessage(0,"End Calibration");
+            } else if (message == "Explore") {
+                start drive;
+                start ExploreMode;
+            }
+        }
+        Wait(100);
+    }
+}
+
+task main() {
+    SetSensorLowspeed(IN_1); // ultra sonic
+    SetSensorLight(IN_2); // right side light
+    SetSensorLight(IN_3); // center light
+    SetSensorLowspeed(IN_4); // infra red
+    SendMessage(0,"Idle");
+    start BluetoothSlave;
+    // calibrate();
+    // OnFwd(OUT_AC, SPEED);
+    // start drive;
+    // start ExploreMode;
+}
