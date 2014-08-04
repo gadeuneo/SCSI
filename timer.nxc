@@ -1,0 +1,51 @@
+int time = 0;
+char state = 'S';
+
+task expire()
+{
+    PlayTone(988, 50);
+    Wait(50);
+}
+
+task count()
+{
+    while(time > 0 && state == 'S')
+    {
+         time--;
+         Wait(10);
+         if(time == 0) start expire;
+    }
+}
+
+task main()
+{
+    while(true)
+    {
+        NumOut(0,LCD_LINE1,time);
+        if (ButtonPressed(BTNLEFT,true))
+        {
+            state = 'S';
+            stop count;
+            stop expire;
+            if(time > 0) time--;
+        }
+        else if (ButtonPressed(BTNRIGHT,true))
+        {
+            state = 'S';
+            stop count;
+            stop expire;
+            time++;
+        }
+        else if (ButtonPressed(BTNCENTER, true))
+        {
+            if(state = 'T') {
+                state = 'S';
+                stop count;
+                stop expire;
+            } else {
+                state = 'T';
+                if(time > 0) start count;
+            }
+        }
+    }
+}
