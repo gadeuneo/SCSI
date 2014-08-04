@@ -1,0 +1,105 @@
+// Defining transmission speeds
+// Reverse (Gear Zero) = -20
+// First gear = 30
+// Second gear = 50
+// Third gear = 75
+// Fourth gear = 100
+
+int shift_up(int current_gear)
+{
+    if(current_gear < 4) {
+        current_gear = current_gear + 1;
+        PlayTone(988, 100);
+    }
+    return current_gear;
+}
+
+int shift_down(int current_gear)
+{
+    if(current_gear > 0) {
+        current_gear = current_gear - 1;
+        PlayTone(1174, 100);
+    }
+    return current_gear;
+}
+
+void kick_ball(int kick, int threshold, int min_threshold)
+{
+    if(kick > min_threshold && kick < threshold)
+    {
+        OnRev(OUT_B,100);
+        Wait(100);
+        OnFwd(OUT_B,100);
+        Wait(130);
+        Off(OUT_B);
+    }
+}
+
+int shift(int left, int right, int threshold, int min_threshold, int gear)
+{
+    int new_gear;
+    if(left < threshold && left > min_threshold) {
+        new_gear = shift_down(gear);
+    } else if (right < threshold && right > min_threshold) {
+        new_gear = shift_up(gear);
+    } else {
+        new_gear = gear;
+    }
+    return new_gear;
+}
+
+task main()
+{
+
+	// Initial settings
+	int threshold = 100;
+	int min_threshold = 25;
+	int gear = 1;
+	int new_gear = 2;
+	int left = 0;
+	int right = 0;
+	int kick = 0;
+	int transmission[] = {-25, 30, 50, 75, 100};
+	SetSensor(IN_1,SENSOR_TOUCH);
+	SetSensor(IN_4,SENSOR_TOUCH);
+
+	// Main loop
+	while (true)
+	{
+		if (SENSOR_1 == 1 && SENSOR_4 == 0)
+		{
+		    left++;
+		    if(left >= threshold) {
+		        OnFwd(OUT_C,transmission[gear]);
+		        OnRev(OUT_A,transmission[gear]);
+		    }
+		}
+        else if (SENSOR_4 == 1 && SENSOR_1 == 0)
+        {
+            right++;
+            if(right >= threshold) {
+            OnFwd(OUT_A,transmission[gear]);
+            OnRev(OUT_C,transmission[gear]);
+            }
+        }
+        else if (SENSOR_1 ==1 && SENSOR_4 ==1)
+        {
+            kick++;
+            if(kick >= threshold) OnFwd(OUT_AC,transmission[gear]);
+        }
+        else if (SENSOR_1 == 0 && SENSOR_4 == 0)
+        {
+            new_gear = shift(left, right, threshold, min_threshold, gear);
+            gear = new_gear;
+            kick_ball(kick, threshold, min_threshold);
+            left = 0;
+            right = 0;
+            kick = 0;
+            Off(OUT_AC);
+        }
+        NumOut(0,LCD_LINE1,CurrentTick());
+        NumOut(0,LCD_LINE2,left);
+        NumOut(0,LCD_LINE3,right);
+        NumOut(0,LCD_LINE4,gear);
+    }
+}
