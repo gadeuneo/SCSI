@@ -1,0 +1,54 @@
+// Program to display a counter
+
+// Global variable; accessible anywhere in the
+// program
+int counter = 0;
+
+task counting()
+{
+	while(true)
+	{
+		counter = counter + 1;
+		NumOut(0,LCD_LINE1,counter);
+	}
+}
+
+task pausing()
+{
+	while (true)
+	{
+		TextOut(0,LCD_LINE2,"pausing...");
+		Wait(1000);
+		TextOut(0,LCD_LINE2,"          ");
+		Wait(1000);
+	}
+}
+
+task main()
+{
+	// 'C' is counting, 'P' is pausing
+	char state = 'C';
+	start counting;
+
+	while (true)
+	{
+		if (state == 'C')
+		{
+			if (ButtonPressed(BTNLEFT,true))
+			{
+				state = 'P';
+				stop counting;
+				start pausing;
+			}
+		}
+		else if (state == 'P')
+		{
+			if (ButtonPressed(BTNRIGHT,true))
+			{
+				state = 'C';
+				stop pausing;
+				start counting;
+			}
+		}
+	}
+}
