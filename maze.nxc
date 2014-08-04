@@ -1,0 +1,166 @@
+// The Maze Explorer Robot
+// Tate Bosler & James Gardner
+
+#define ULTRA SENSOR_1
+#define SIDE_LIGHT SENSOR_2
+#define CENTER_LIGHT SENSOR_3
+#define IR SENSOR_4
+
+#define SPEED 50
+
+#define SILVER 70
+#define WHITE 60
+#define BLUE 35
+
+char straight, left, right;
+int dir, score;
+int row = 5;
+int column = 5;
+int grid[11][11];
+
+int close(int sensor, int target) {
+    return abs(sensor - target);
+}
+
+task debug() {
+    while(true) {
+        NumOut(0, LCD_LINE1, dir);
+        NumOut(0, LCD_LINE2, CENTER_LIGHT);
+        NumOut(0, LCD_LINE3, SIDE_LIGHT);
+    }
+}
+
+sub ChangeDirection(char turn) {
+    // turn = L or R
+    // direction is relative to the robot's starting position
+    // 0 is straight ahead, 1 is right, 2 is backwards, 3 is left
+
+    if(turn == 'L') {
+        dir--;
+    } else {
+        dir++;
+    }
+    if(dir == 4) dir = 0;
+    if(dir == -1) dir = 3;
+}
+
+sub CheckTile() {
+    // Explores a tile to find out if there is anything left/right
+    // Robot has arrived on silver.
+    // Update the grid tracker
+    if(dir == 0) {
+        row--;
+        score = 4;
+    }
+    if(dir == 2) {
+        row++;
+        score = 0;
+    }
+    if(dir == 1) {
+        column++;
+        score = 8;
+    }
+    if(dir == 3) {
+        column--;
+        score = 2;
+    }
+    // Continue driving forward until you hit non-silver
+    OnFwd(OUT_AC, SPEED);
+    until(close(CENTER_LIGHT, SILVER) <= 5);
+    Off(OUT_AC);
+    Wait(200);
+    OnFwd(OUT_AC, SPEED);
+    Wait(200);
+    until(CENTER_LIGHT <= (SILVER - 7));
+    Off(OUT_AC);
+    Wait(200);
+    if(close(CENTER_LIGHT, BLUE) <= 10) {
+        // Straight is a valid option
+        straight = 'Y';
+        TextOut(0,LCD_LINE6,"Straight: PASS");
+        if(dir == 0) score += 1;
+        if(dir == 1) score += 2;
+        if(dir == 2) score += 4;
+        if(dir == 3) score += 8;
+    } else {
+        // You hit a dead end, bend or intersection
+        straight = 'N';
+        TextOut(0,LCD_LINE6,"Straight: FAIL");
+    }
+    Wait(300);
+    if(close(SIDE_LIGHT, BLUE) <= 10) {
+        right = 'Y';
+        TextOut(0,LCD_LINE7,"Right: PASS");
+        if(dir == 0) score += 2;
+        if(dir == 1) score += 4;
+        if(dir == 2) score += 8;
+        if(dir == 3) score += 1;
+    } else {
+        right = 'N';
+        TextOut(0,LCD_LINE7,"Right: FAIL");
+    }
+    OnFwd(OUT_C, SPEED);
+    OnRev(OUT_A, SPEED);
+    Wait(600);
+    if(close(CENTER_LIGHT, BLUE) <= 10) {
+        left = 'Y';
+        TextOut(0,LCD_LINE8,"Left: PASS");
+        if(dir == 0) score += 8;
+        if(dir == 1) score += 1;
+        if(dir == 2) score += 2;
+        if(dir == 3) score += 4;
+    } else {
+        left = 'N';
+        TextOut(0,LCD_LINE8,"Left: FAIL");
+    }
+    OnRev(OUT_C, SPEED);
+    OnFwd(OUT_A, SPEED);
+    Wait(600);
+    Off(OUT_AC);
+    Wait(300);
+}
+
+sub DecideAction() {
+    if(straight == 'N' && left == 'N' && right == 'N') {
+        // Dead end
+        OnFwd(OUT_A,SPEED);
+        OnRev(OUT_C,SPEED);
+        repeat(2) {
+            ChangeDirection('R');
+        }
+    } else if (straight == 'N' && ((left == 'Y' && right == 'N') || (right == 'Y' && left == 'N'))) {
+        // Bend
+        if(left == 'Y') {
+            OnRev(OUT_A,SPEED);
+            OnFwd(OUT_C,SPEED);
+            ChangeDirection('L');
+        } else {
+            OnFwd(OUT_A,SPEED);
+            OnRev(OUT_C,SPEED);
+            ChangeDirection('R');
+        }
+    } else if (straight == 'Y' && left == 'N' && right == 'N') {
+        // Straight
+        OnFwd(OUT_AC, SPEED);
+    }
+    Wait(50);
+    until(close(CENTER_LIGHT, BLUE) <= 5);
+    Wait(20);
+    grid[row][column] = score;
+}
+
+task main() {
+    SetSensorLowspeed(IN_1);
+    SetSensorLight(IN_2);
+    SetSensorLight(IN_3);
+    SetSensorLowspeed(IN_4);
+    start debug;
+    if(close(CENTER_LIGHT, SILVER) > 5) {
+        OnFwd(OUT_AC, SPEED);
+        until(close(CENTER_LIGHT, SILVER) <= 5);
+    }
+    while(true) {
+        CheckTile();
+        DecideAction();
+    }
+}
