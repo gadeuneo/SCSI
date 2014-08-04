@@ -1,0 +1,19 @@
+task main()
+{
+    int speed = 25;
+    int target = 58;
+
+    SetSensorLight(IN_1);
+    while (true)
+    {
+        if((Sensor(IN_1) - target) < -2) {
+            OnRev(OUT_A, speed);
+            OnFwd(OUT_C, speed-10);
+        } else if ((Sensor(IN_1) - target) > 2) {
+            OnFwd(OUT_A, speed);
+            OnRev(OUT_C, speed-10);
+        } else {
+            OnFwd(OUT_AC, speed);
+        }
+    }
+}
